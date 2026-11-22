@@ -1,6 +1,7 @@
 # Slice 1: Foundations and Quote Request
 
-Status: READY FOR PLAN REVIEW (all HUMAN inputs resolved 2026-11-10; some are defaults applied because Graham had no preference, see docs/decisions.md).
+Status: APPROVED 2026-11-11 (spec and plan reviewed by Graham; implementation started). Some inputs are defaults applied
+because Graham had no preference; see docs/decisions.md.
 
 ## Goal
 A DRF project with a QuoteRequest that can be created and read through the API, with validation and a

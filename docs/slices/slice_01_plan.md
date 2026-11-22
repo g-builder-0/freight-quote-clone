@@ -1,7 +1,7 @@
 # Slice 1 Plan: Foundations and Quote Request
 
-Status: DRAFT, AWAITING GRAHAM'S REVIEW. No code has been written. Do not start implementation until Graham approves
-this plan in writing (Step 8: check the plan against `slice_01_quote_request.md`).
+Status: APPROVED by Graham 2026-11-11 (Step 8 review done; Graham asked to start implementation). Implementation
+began 2026-11-11. The spec (`slice_01_quote_request.md`) wins if the plan and spec ever disagree.
 
 This plan was rewritten from the agent's earlier chat version after the 2026-11-10 decisions (class computed on read,
 `CLASS_TABLE_VERSION` added). Where wording differs from the chat version, this file is the one to review. Names marked
