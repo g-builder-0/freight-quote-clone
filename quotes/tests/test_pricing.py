@@ -196,6 +196,23 @@ class WorkedExampleTests(SimpleTestCase):
         self.assertEqual(price.transit_days, 3)
         self.assertEqual(price.estimated_delivery_date, date(2026, 12, 3))
 
+    def test_without_a_pickup_date_the_prices_are_the_same_and_there_is_no_delivery_date(self):
+        # Slice 5 price preview: no pickup date is sent, so there is no estimated delivery date.
+        inputs = dict(
+            origin_postal_code="75002",
+            destination_postal_code="30301",
+            origin_location_type="business_dock",
+            destination_location_type="residential",
+            units=[ShipmentUnit(1200, 1, "55"), ShipmentUnit(400, 1, "125")],
+            liftgate_requested=True,
+        )
+        with_date = price_quote(MID, pickup_date=date(2026, 11, 30), **inputs)
+        without_date = price_quote(MID, **inputs)
+        self.assertIsNone(without_date.estimated_delivery_date)
+        self.assertEqual(without_date.price, with_date.price)
+        self.assertEqual(without_date.line_items, with_date.line_items)
+        self.assertEqual(without_date.transit_days, with_date.transit_days)
+
     def test_example_2_cheap_minimum_charge_applies(self):
         price = price_quote(
             CHEAP,

@@ -12,10 +12,18 @@ from .serializers import (
     BookingSerializer,
     ClassPreviewResultSerializer,
     ClassPreviewSerializer,
+    PricePreviewPriceSerializer,
+    PricePreviewSerializer,
     QuoteRequestSerializer,
     QuoteSerializer,
 )
-from .services import NoTariffError, create_quotes
+from .services import (
+    NoTariffError,
+    create_quotes,
+    current_tariff_version,
+    price_with_every_carrier,
+    unit_classes,
+)
 
 
 def quote_queryset():
@@ -190,5 +198,40 @@ class LimitsView(APIView):
                     "special_instructions_max": contacts.INSTRUCTIONS_MAX_LENGTH,
                     "cancel_reason_max": contacts.CANCEL_REASON_MAX_LENGTH,
                 },
+            }
+        )
+
+
+class PricePreviewView(APIView):
+    """POST: one price per carrier for a shipment, without saving anything (Slice 5).
+
+    Prices with the same function a real quote uses, so the two cannot disagree. The units are
+    built in memory (like the class preview) so the model's own suggested class prices a unit
+    whose class is blank. No quote request, quote or booking is created.
+    """
+
+    def post(self, request):
+        serializer = PricePreviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        units = [HandlingUnit(**unit) for unit in data["handling_units"]]
+        try:
+            priced = price_with_every_carrier(
+                current_tariff_version(),
+                units,
+                unit_classes(units),
+                origin_postal_code=data["origin_postal_code"],
+                destination_postal_code=data["destination_postal_code"],
+                origin_location_type=data["origin_location_type"],
+                destination_location_type=data["destination_location_type"],
+                liftgate_requested=data.get("liftgate_requested", False),
+                appointment_requested=data.get("appointment_requested", False),
+            )
+        except NoTariffError as error:
+            return Response({"detail": str(error)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response(
+            {
+                "note": serializers.PRICE_PREVIEW_NOTE,
+                "prices": PricePreviewPriceSerializer(priced, many=True).data,
             }
         )

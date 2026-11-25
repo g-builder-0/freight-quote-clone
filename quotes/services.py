@@ -6,6 +6,10 @@ single transaction: either every quote is saved or none is. The caller passes th
 so tests supply the clock and nothing here reads the real one.
 """
 
+from collections.abc import Iterable
+from dataclasses import dataclass
+from datetime import date
+
 from django.db import transaction
 from django.utils import timezone
 
@@ -19,11 +23,74 @@ from .models import (
     QuoteRequest,
     TariffVersion,
 )
-from .pricing import ShipmentUnit, price_quote, pricing_class
+from .pricing import CarrierTariffData, QuotePrice, ShipmentUnit, price_quote, pricing_class
 
 
 class NoTariffError(Exception):
     """There is no current tariff version, so nothing can be priced."""
+
+
+def current_tariff_version() -> TariffVersion:
+    """The tariff version prices come from; raises `NoTariffError` when there is none."""
+    version = TariffVersion.current()
+    if version is None:
+        raise NoTariffError("There is no current tariff version.")
+    return version
+
+
+def unit_classes(units: Iterable) -> list[str]:
+    """The class that prices each unit: the shipper's class if given, else the suggested class.
+
+    `units` are saved or unsaved `HandlingUnit` objects.
+    """
+    return [pricing_class(unit.freight_class, unit.suggested_class) for unit in units]
+
+
+@dataclass(frozen=True)
+class CarrierPrice:
+    tariff: CarrierTariffData
+    price: QuotePrice
+
+
+def price_with_every_carrier(
+    version: TariffVersion,
+    units: list,
+    classes: list[str],
+    *,
+    origin_postal_code: str,
+    destination_postal_code: str,
+    origin_location_type: str,
+    destination_location_type: str,
+    liftgate_requested: bool = False,
+    appointment_requested: bool = False,
+    pickup_date: date | None = None,
+) -> list[CarrierPrice]:
+    """Price one shipment with every carrier of `version`, in carrier order.
+
+    The one place a shipment is priced, used both to create quotes and to preview prices (Slice 5),
+    so a preview cannot disagree with a real quote. Without a pickup date no delivery date is given.
+    """
+    shipment = [
+        ShipmentUnit(unit.weight_lb, unit.quantity, freight_class)
+        for unit, freight_class in zip(units, classes, strict=True)
+    ]
+    return [
+        CarrierPrice(
+            tariff,
+            price_quote(
+                tariff,
+                origin_postal_code=origin_postal_code,
+                destination_postal_code=destination_postal_code,
+                origin_location_type=origin_location_type,
+                destination_location_type=destination_location_type,
+                pickup_date=pickup_date,
+                units=shipment,
+                liftgate_requested=liftgate_requested,
+                appointment_requested=appointment_requested,
+            ),
+        )
+        for tariff in (carrier.to_data() for carrier in version.carriers.order_by("id"))
+    ]
 
 
 @transaction.atomic
@@ -37,32 +104,26 @@ def create_quotes(quote_request: QuoteRequest, now) -> list[Quote]:
     today = timezone.localtime(now).date()
     pickup.validate_pickup_date(quote_request.pickup_date, today)
 
-    version = TariffVersion.current()
-    if version is None:
-        raise NoTariffError("There is no current tariff version.")
+    version = current_tariff_version()
 
     units = list(quote_request.handling_units.all())
-    # The class that prices each unit: the shipper's class if given, else the suggested class.
-    classes = [pricing_class(unit.freight_class, unit.suggested_class) for unit in units]
-    shipment = [
-        ShipmentUnit(unit.weight_lb, unit.quantity, freight_class)
-        for unit, freight_class in zip(units, classes, strict=True)
-    ]
+    classes = unit_classes(units)
+    priced = price_with_every_carrier(
+        version,
+        units,
+        classes,
+        origin_postal_code=quote_request.origin_postal_code,
+        destination_postal_code=quote_request.destination_postal_code,
+        origin_location_type=quote_request.origin_location_type,
+        destination_location_type=quote_request.destination_location_type,
+        liftgate_requested=quote_request.liftgate_requested,
+        appointment_requested=quote_request.appointment_requested,
+        pickup_date=quote_request.pickup_date,
+    )
 
     quotes = []
-    for carrier in version.carriers.order_by("id"):
-        tariff = carrier.to_data()
-        price = price_quote(
-            tariff,
-            origin_postal_code=quote_request.origin_postal_code,
-            destination_postal_code=quote_request.destination_postal_code,
-            origin_location_type=quote_request.origin_location_type,
-            destination_location_type=quote_request.destination_location_type,
-            pickup_date=quote_request.pickup_date,
-            units=shipment,
-            liftgate_requested=quote_request.liftgate_requested,
-            appointment_requested=quote_request.appointment_requested,
-        )
+    for carrier_price in priced:
+        tariff, price = carrier_price.tariff, carrier_price.price
         quote = Quote.objects.create(
             quote_request=quote_request,
             carrier_code=tariff.code,

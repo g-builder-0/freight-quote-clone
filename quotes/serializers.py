@@ -127,6 +127,63 @@ class QuotedUnitSerializer(serializers.ModelSerializer):
         fields = ["handling_unit", "freight_class"]
 
 
+PRICE_PREVIEW_NOTE = "Estimate only. Your final price is set when you request quotes."
+
+
+class PricePreviewUnitSerializer(serializers.ModelSerializer):
+    """One unit in `POST /api/price-preview/`: only the fields that change the price (Slice 5).
+
+    Built from `HandlingUnit`, so the limits, the whole-number rule and the freight class choices
+    are the quote request's own. The class may be left blank; the suggested class prices the unit.
+    """
+
+    class Meta:
+        model = HandlingUnit
+        fields = [
+            "quantity",
+            "length_in",
+            "width_in",
+            "height_in",
+            "weight_lb",
+            "freight_class",
+        ]
+
+
+class PricePreviewSerializer(serializers.ModelSerializer):
+    """Input for `POST /api/price-preview/`: the quote request fields that change the price.
+
+    Addresses, the pickup date and the unit details that never change a price are not asked for.
+    Built from `QuoteRequest`, so the ZIP check and the location type choices are the same ones
+    the quote request enforces.
+    """
+
+    handling_units = PricePreviewUnitSerializer(many=True, allow_empty=False)
+
+    class Meta:
+        model = QuoteRequest
+        fields = [
+            "origin_postal_code",
+            "origin_location_type",
+            "destination_postal_code",
+            "destination_location_type",
+            "liftgate_requested",
+            "appointment_requested",
+            "handling_units",
+        ]
+
+
+class PricePreviewPriceSerializer(serializers.Serializer):
+    """One carrier's price in the preview response; takes a `services.CarrierPrice`."""
+
+    carrier = serializers.SerializerMethodField()
+    total = serializers.DecimalField(max_digits=10, decimal_places=2, source="price.price")
+    transit_days = serializers.IntegerField(source="price.transit_days")
+    line_items = QuoteLineItemSerializer(many=True, source="price.line_items")
+
+    def get_carrier(self, carrier_price) -> dict:
+        return {"code": carrier_price.tariff.code, "name": carrier_price.tariff.name}
+
+
 class QuoteSerializer(serializers.ModelSerializer):
     """A stored quote. Everything except `bookable` and `not_bookable_reason` is read straight from
     the saved row. Those two are computed on every read by `Quote.check_bookable` and never stored:

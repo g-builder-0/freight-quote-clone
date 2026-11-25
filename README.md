@@ -20,6 +20,7 @@ Details, rules and worked examples are in the slice specs in `docs/slices/`.
 | `POST /api/bookings/{id}/cancel/` | Cancel a booking with a reason. |
 | `POST /api/class-preview/` | Density and suggested class for one unit; saves nothing. |
 | `GET /api/limits/` | The size, weight and text-length limits the API enforces, for counters and messages. |
+| `POST /api/price-preview/` | One estimated price per carrier, with its line items and transit days, for a shipment; saves nothing. |
 
 ## Known simplifications (on purpose)
 - Tariffs are invented and illustrative (3 carriers, 5 weight breaks), not real carrier rates.

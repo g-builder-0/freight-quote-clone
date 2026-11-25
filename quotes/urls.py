@@ -1,7 +1,14 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .views import BookingViewSet, ClassPreviewView, LimitsView, QuoteRequestViewSet, QuoteViewSet
+from .views import (
+    BookingViewSet,
+    ClassPreviewView,
+    LimitsView,
+    PricePreviewView,
+    QuoteRequestViewSet,
+    QuoteViewSet,
+)
 
 router = DefaultRouter()
 router.register("quote-requests", QuoteRequestViewSet, basename="quote-request")
@@ -12,4 +19,5 @@ urlpatterns = [
     *router.urls,
     path("class-preview/", ClassPreviewView.as_view(), name="class-preview"),
     path("limits/", LimitsView.as_view(), name="limits"),
+    path("price-preview/", PricePreviewView.as_view(), name="price-preview"),
 ]

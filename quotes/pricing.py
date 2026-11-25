@@ -97,7 +97,7 @@ class QuotePrice:
     price: Decimal  # the customer price: apply_markup(carrier_cost)
     line_items: tuple[LineItem, ...]
     transit_days: int
-    estimated_delivery_date: date
+    estimated_delivery_date: date | None  # None when no pickup date was given (price preview)
 
 
 def to_cents(amount: Decimal) -> Decimal:
@@ -227,8 +227,8 @@ def price_quote(
     destination_postal_code: str,
     origin_location_type: str,
     destination_location_type: str,
-    pickup_date: date,
     units: Iterable[ShipmentUnit],
+    pickup_date: date | None = None,
     liftgate_requested: bool = False,
     appointment_requested: bool = False,
 ) -> QuotePrice:
@@ -300,5 +300,7 @@ def price_quote(
         price=apply_markup(carrier_cost),
         line_items=tuple(items),
         transit_days=days,
-        estimated_delivery_date=add_business_days(pickup_date, days),
+        estimated_delivery_date=(
+            None if pickup_date is None else add_business_days(pickup_date, days)
+        ),
     )
