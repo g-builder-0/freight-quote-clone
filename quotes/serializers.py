@@ -51,6 +51,27 @@ class HandlingUnitSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
 
+class ClassPreviewSerializer(serializers.ModelSerializer):
+    """Input for `POST /api/class-preview/`: one unit's weight and dimensions (Slice 5).
+
+    The fields come from `HandlingUnit`, so the whole-number rule, the minimum of 1 and the size
+    and weight limits are the same ones the quote request enforces, and all four are required.
+    """
+
+    class Meta:
+        model = HandlingUnit
+        fields = ["weight_lb", "length_in", "width_in", "height_in"]
+
+
+class ClassPreviewResultSerializer(HandlingUnitSerializer):
+    """Output for `POST /api/class-preview/`: reuses the density and class fields above, so the
+    2-decimal rounding is the existing rule and not a copy."""
+
+    class Meta(HandlingUnitSerializer.Meta):
+        fields = ["density", "suggested_class"]
+        read_only_fields = fields
+
+
 class QuoteRequestSerializer(serializers.ModelSerializer):
     # allow_empty=False enforces "a quote request must have at least one handling unit".
     handling_units = HandlingUnitSerializer(many=True, allow_empty=False)

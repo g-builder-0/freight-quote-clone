@@ -1,13 +1,20 @@
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from . import contacts, serializers
 from .bill_of_lading import build_labels
 from .booking_service import BookingConflict, book_quote, cancel_booking
-from .models import Booking, BookingStatus, Quote, QuoteRequest
+from .models import Booking, BookingStatus, HandlingUnit, Quote, QuoteRequest
 from .pickup import PickupDateError
-from .serializers import BookingSerializer, QuoteRequestSerializer, QuoteSerializer
+from .serializers import (
+    BookingSerializer,
+    ClassPreviewResultSerializer,
+    ClassPreviewSerializer,
+    QuoteRequestSerializer,
+    QuoteSerializer,
+)
 from .services import NoTariffError, create_quotes
 
 
@@ -152,3 +159,17 @@ class BookingViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
         except BookingConflict as error:
             return _conflict(error)
         return Response(BookingSerializer(cancelled).data)
+
+
+class ClassPreviewView(APIView):
+    """POST: density and suggested class for one unit's weight and dimensions (Slice 5).
+
+    Calculates only. The unit is built in memory so the model's own `density` and
+    `suggested_class` do the work; it is never saved and no quote request is touched.
+    """
+
+    def post(self, request):
+        serializer = ClassPreviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        unit = HandlingUnit(**serializer.validated_data)
+        return Response(ClassPreviewResultSerializer(unit).data)

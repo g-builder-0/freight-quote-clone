@@ -2,6 +2,24 @@
 
 LTL freight quote and booking API (Django REST Framework). Work in progress; the spec for each slice is in `docs/slices/`.
 
+## Endpoints
+Details, rules and worked examples are in the slice specs in `docs/slices/`.
+
+| Method and path | Purpose |
+|---|---|
+| `POST /api/quote-requests/` | Create a quote request (route, items, pickup date). |
+| `GET /api/quote-requests/` | List quote requests, newest first (paginated). |
+| `GET /api/quote-requests/{id}/` | One quote request. |
+| `POST /api/quote-requests/{id}/quotes/` | Create one quote per carrier for the request. |
+| `GET /api/quote-requests/{id}/quotes/` | Every quote made for the request. |
+| `GET /api/quotes/{id}/` | One quote with its line items. |
+| `POST /api/quotes/{id}/bookings/` | Book a quote (shipper and receiver contacts, optional instructions). |
+| `GET /api/bookings/{id}/` | One booking. |
+| `GET /api/bookings/{id}/bill-of-lading/` | The bill of lading snapshot. |
+| `GET /api/bookings/{id}/labels/` | Pallet labels, one per unit (409 if cancelled). |
+| `POST /api/bookings/{id}/cancel/` | Cancel a booking with a reason. |
+| `POST /api/class-preview/` | Density and suggested class for one unit; saves nothing. |
+
 ## Known simplifications (on purpose)
 - Tariffs are invented and illustrative (3 carriers, 5 weight breaks), not real carrier rates.
 - Zone factor is 1.00 + 0.10 per difference in the first ZIP digit.

@@ -1,10 +1,14 @@
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .views import BookingViewSet, QuoteRequestViewSet, QuoteViewSet
+from .views import BookingViewSet, ClassPreviewView, QuoteRequestViewSet, QuoteViewSet
 
 router = DefaultRouter()
 router.register("quote-requests", QuoteRequestViewSet, basename="quote-request")
 router.register("quotes", QuoteViewSet, basename="quote")
 router.register("bookings", BookingViewSet, basename="booking")
 
-urlpatterns = router.urls
+urlpatterns = [
+    *router.urls,
+    path("class-preview/", ClassPreviewView.as_view(), name="class-preview"),
+]
