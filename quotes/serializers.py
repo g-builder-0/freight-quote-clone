@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from . import pickup
-from .models import HandlingUnit, Quote, QuotedUnit, QuoteLineItem, QuoteRequest
+from .models import Booking, HandlingUnit, Quote, QuotedUnit, QuoteLineItem, QuoteRequest
 
 
 def get_today() -> date:
@@ -150,3 +150,52 @@ class QuoteSerializer(serializers.ModelSerializer):
 
     def get_not_bookable_reason(self, quote: Quote) -> str:
         return self._check(quote).reason
+
+
+class BookingSerializer(serializers.ModelSerializer):
+    """A stored booking, read-only. `confirmation_total` is the quote's price, read from the quote;
+    the bill of lading itself is served by its own endpoint and never shows a price."""
+
+    booking_number = serializers.CharField(read_only=True)
+    quote = serializers.IntegerField(source="quote_id", read_only=True)
+    carrier = serializers.SerializerMethodField()
+    confirmation_total = serializers.DecimalField(
+        source="quote.total", max_digits=10, decimal_places=2, read_only=True
+    )
+    shipper_contact = serializers.SerializerMethodField()
+    receiver_contact = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Booking
+        fields = [
+            "id",
+            "booking_number",
+            "status",
+            "quote",
+            "carrier",
+            "confirmation_total",
+            "booked_at",
+            "shipper_contact",
+            "receiver_contact",
+            "special_instructions",
+            "cancelled_at",
+            "cancel_reason",
+        ]
+        read_only_fields = fields
+
+    def get_carrier(self, booking: Booking) -> dict:
+        return {"code": booking.quote.carrier_code, "name": booking.quote.carrier_name}
+
+    def get_shipper_contact(self, booking: Booking) -> dict:
+        return {
+            "name": booking.shipper_name,
+            "phone": booking.shipper_phone,
+            "email": booking.shipper_email,
+        }
+
+    def get_receiver_contact(self, booking: Booking) -> dict:
+        return {
+            "name": booking.receiver_name,
+            "phone": booking.receiver_phone,
+            "email": booking.receiver_email,
+        }

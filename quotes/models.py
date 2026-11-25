@@ -7,6 +7,7 @@ from django.db import models
 from django.utils import timezone
 
 from . import pickup, pricing
+from .bill_of_lading import booking_number_for
 from .freight_class import (
     CLASS_TABLE_VERSION,
     STANDARD_NMFC_CLASSES,
@@ -350,3 +351,88 @@ class QuotedUnit(ImmutableModel):
 
     def __str__(self) -> str:
         return f"Unit {self.handling_unit_id} priced as class {self.freight_class}"
+
+
+# ---------------------------------------------------------------------------------------------
+# Slice 3: bookings.
+# ---------------------------------------------------------------------------------------------
+
+
+class BookingStatus(models.TextChoices):
+    BOOKED = "booked", "Booked"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class Booking(models.Model):
+    """A quote that the shipper has booked: the contacts, the instructions and the bill of lading.
+
+    A booking references exactly one quote, and the quote is never changed by it. The bill of
+    lading is stored as a snapshot made when the booking is created and never changes. Once saved,
+    the only change allowed is cancellation, through `mark_cancelled`; any other save, and any
+    delete, raises. Like the other guards in this app it is a safety net, not a security boundary.
+    """
+
+    quote = models.OneToOneField(Quote, on_delete=models.PROTECT, related_name="booking")
+    status = models.CharField(
+        max_length=20, choices=BookingStatus.choices, default=BookingStatus.BOOKED
+    )
+    booked_at = models.DateTimeField(default=timezone.now)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancel_reason = models.CharField(max_length=200, blank=True)
+
+    shipper_name = models.CharField(max_length=100)
+    shipper_phone = models.CharField(max_length=20, blank=True)
+    shipper_email = models.EmailField(blank=True)
+    receiver_name = models.CharField(max_length=100)
+    receiver_phone = models.CharField(max_length=20, blank=True)
+    receiver_email = models.EmailField(blank=True)
+    special_instructions = models.TextField(blank=True)
+
+    # Built once, right after the booking is created (it needs the booking's own id).
+    bill_of_lading = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["-booked_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.booking_number} ({self.status})"
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding and not getattr(self, "_may_update", False):
+            raise ImmutableRecordError("Booking rows can only be changed by cancelling them.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ImmutableRecordError("Booking rows cannot be deleted.")
+
+    @property
+    def booking_number(self) -> str:
+        """BK- plus the id padded to six digits; empty until the booking is saved."""
+        return booking_number_for(self.pk) if self.pk is not None else ""
+
+    def _update_fields(self, fields: list[str]) -> None:
+        """Save only `fields` of a saved booking, opening the guard for this one save."""
+        self._may_update = True
+        try:
+            self.save(update_fields=fields)
+        finally:
+            self._may_update = False
+
+    def attach_bill_of_lading(self, snapshot: dict) -> None:
+        """Store the bill of lading, once. It is built right after the booking is created
+        because it contains the booking number, which comes from the id."""
+        if self.bill_of_lading:
+            raise ImmutableRecordError("The bill of lading of a booking cannot be replaced.")
+        self.bill_of_lading = snapshot
+        self._update_fields(["bill_of_lading"])
+
+    def mark_cancelled(self, reason: str, now) -> None:
+        """Record a cancellation: the status, the time and the reason, and nothing else.
+
+        This does not check whether cancelling is allowed from the current status; the booking
+        service asks `can_transition` first.
+        """
+        self.status = BookingStatus.CANCELLED
+        self.cancelled_at = now
+        self.cancel_reason = reason
+        self._update_fields(["status", "cancelled_at", "cancel_reason"])

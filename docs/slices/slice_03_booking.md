@@ -1,6 +1,6 @@
 # Slice 3: Booking and Bill of Lading
 
-Status: DRAFT for Graham's acceptance (drafted 2026-11-24). Graham made every decision recorded here and wrote the worked examples' inputs and expected results in conversation with the agent; the agent assembled this file. Items marked PROPOSED are the agent's suggestions and are not decisions until Graham accepts them (see Open questions). Carried-forward requirements from `slice_03_notes.md` are included here; that file is superseded by this one. The rows for `docs/decisions.md` are in `decisions_slice_03_rows.md`. Implementation starts only after Graham approves the Slice 3 plan.
+Status: ACCEPTED and IMPLEMENTED (drafted 2026-11-24; Graham approved the PROPOSED items and the plan on 2026-11-24). Graham made every decision recorded here and wrote the worked examples' inputs and expected results in conversation with the agent; the agent assembled this file. Items marked PROPOSED are the agent's suggestions and are not decisions until Graham accepts them (see Open questions). Carried-forward requirements from `slice_03_notes.md` are included here; that file is superseded by this one. The rows for `docs/decisions.md` are in `decisions_slice_03_rows.md`. Implementation starts only after Graham approves the Slice 3 plan.
 
 ## Goal
 A shipper chooses one of the quotes from Slice 2, enters the shipper and receiver contacts and any special instructions, and books it. The booking is checked against the Slice 2 `check_bookable(now)` function, and on success produces a booking number, a bill of lading (the shipping document) and one pallet label for every physical handling unit. A booking can be cancelled while it is still `booked`.
@@ -12,7 +12,7 @@ Slice 3 builds only the statuses `booked` and `cancelled`. The later statuses (p
 ### Booking a quote
 - A booking references exactly one quote. The quote is never changed by booking or cancelling.
 - A quote can be booked once. A second attempt on the same quote is rejected (409). This also holds after a cancellation: a cancelled booking's quote cannot be booked again, and the shipper must create a new quote (which also guarantees current rates).
-- A quote request can have only one active (`booked`) booking at a time, even though it has three quotes. Booking a second quote of a request that already has an active booking is rejected (409). PROPOSED detail: this is enforced in the booking service and the "one booking per quote" rule is also enforced by a unique constraint.
+- A quote request can have only one active (`booked`) booking at a time, even though it has three quotes. Booking a second quote of a request that already has an active booking is rejected (409). Approved detail: this is enforced in the booking service and the "one booking per quote" rule is also enforced by a unique constraint.
 - Booking calls the Slice 2 function `check_bookable(now)`. A failed check is a 409 and the response carries the reason text from the function. The current time is passed in so tests supply the clock.
 - Booking is the real enforcement of the rules; the `bookable` flag on a quote in Slice 2 is only for the front end.
 
@@ -22,7 +22,7 @@ Slice 3 builds only the statuses `booked` and `cancelled`. The later statuses (p
 - The receiver contact is always required (it is needed for the consignee details on the bill of lading).
 - If the quote's request has the appointment flag, the receiver's phone is required; an email alone is not accepted, because a carrier schedules a delivery appointment by calling the receiver. (Decided 2026-11-24, Option B.)
 - Special instructions are optional text of at most 500 characters.
-- PROPOSED: phone numbers are US numbers of 10 digits, with spaces, dashes, dots and parentheses allowed and an optional leading 1; emails use the standard email check.
+- Phone numbers (approved): US numbers of 10 digits, with spaces, dashes, dots and parentheses allowed and an optional leading 1 or +1, stored as NNN-NNN-NNNN; emails use the standard email check.
 
 ### Booking number
 - The booking number is `BK-` plus the booking's database id padded to six digits (the first booking in an empty database is `BK-000001`). The bill of lading number is the same string.
@@ -56,11 +56,11 @@ Slice 3 builds only the statuses `booked` and `cancelled`. The later statuses (p
 
 - A 409 body is `{"detail": "<reason>"}`. A 400 body uses the usual field errors, for example `{"receiver_contact": {"phone": ["..."]}}`.
 - Reason texts from `check_bookable` (Slice 2): "The quote has expired.", "The freight class table has changed since this quote.", "The rates have changed since this quote.", "The pickup date is no longer available." They are checked in that order and the first failure is reported.
-- PROPOSED texts: "This quote has already been booked." (409); "This booking is already cancelled." (409); "Labels are not available for a cancelled booking." (409); "A phone number is required for the receiver when the quote includes a delivery appointment." (400, on `receiver_contact.phone`).
-- PROPOSED order for 409 checks: already booked first, then `check_bookable`.
+- Texts (approved): "This quote has already been booked." (409); "This booking is already cancelled." (409); "Labels are not available for a cancelled booking." (409); "A phone number is required for the receiver when the quote includes a delivery appointment." (400, on `receiver_contact.phone`).
+- Order for 409 checks (approved): already booked first, then `check_bookable`.
 - A failed request saves nothing. The booking and its snapshot are created in one transaction.
 
-## Models (PROPOSED names; Graham approves with the plan)
+## Models (names approved with the plan)
 - `Booking`: one-to-one to `Quote` (protected), `status` (`booked` or `cancelled`), `booked_at`, `cancelled_at` and `cancel_reason` (blank until cancelled), the shipper contact (name, phone, email), the receiver contact (name, phone, email), `special_instructions`, and `bill_of_lading` (JSON snapshot). `booking_number` is derived from the id and is not stored.
 - Only the status, `cancelled_at` and `cancel_reason` can change after creation, and only through the cancel function. The snapshot is never changed. Bookings are never deleted.
 
@@ -117,7 +117,7 @@ Expected: 201, `BK-000001`. `GET /api/bookings/{id}/labels/` returns 7 labels:
 - The number of labels is the sum of the quantities (7), not the number of lines (3). Each label shows the weight of one unit, not of the line. Every label also shows the shipper and consignee names and cities, the destination ZIP 90001, the carrier, the pickup date and the commodity description of its unit.
 
 ### Case 4: rejections and cancellation
-Test inputs for 4a and 4b (receiver and address) are PROPOSED and may be changed; the rest are fixed by the rules above. For 4a and 4b the shipper is Dana Whitfield as above, the receiver is Luis Herrera, 602-555-0126, 1200 Sonoran Business Pkwy, Phoenix, AZ 85001 (made up), and the instructions are blank.
+Test inputs for 4a and 4b (receiver and address) were proposed by the agent and approved by Graham; the rest are fixed by the rules above. For 4a and 4b the shipper is Dana Whitfield as above, the receiver is Luis Herrera, 602-555-0126, 1200 Sonoran Business Pkwy, Phoenix, AZ 85001 (made up), and the instructions are blank.
 
 | Sub-case | Quote | Action | Expected |
 |---|---|---|---|
@@ -137,7 +137,7 @@ Test inputs for 4a and 4b (receiver and address) are PROPOSED and may be changed
 ## API
 | Method and path | Purpose |
 |---|---|
-| `POST /api/quotes/{id}/bookings/` | Book the quote. Body: `shipper_contact`, `receiver_contact`, optional `special_instructions`. Returns 201 with the booking. (PROPOSED path.) |
+| `POST /api/quotes/{id}/bookings/` | Book the quote. Body: `shipper_contact`, `receiver_contact`, optional `special_instructions`. Returns 201 with the booking. (Path approved.) |
 | `GET /api/bookings/{id}/` | One booking: number, status, quote, carrier, booked time, contacts, instructions, confirmation total, cancellation details. |
 | `GET /api/bookings/{id}/bill-of-lading/` | The snapshot. |
 | `GET /api/bookings/{id}/labels/` | The labels (409 if cancelled). |
@@ -151,7 +151,7 @@ Slice 3 is done when `python manage.py test`, `ruff check .` and `ruff format --
 - The bill of lading never shows a price or fee; it is unchanged after the quote request is edited.
 - Contact rules: receiver and shipper required; phone or email required; an appointment quote requires the receiver's phone; instructions over 500 characters rejected.
 - The booking and its snapshot are saved in one transaction; a failure part-way saves nothing. A concurrent double booking cannot create two bookings (the unique constraint backs up the service check).
-- A request with an active booking rejects a booking of its other quotes; after cancellation, a new quote of the same request can be booked.
+- A request with an active booking rejects a booking of its other quotes with the 409 text "This quote request already has an active booking." (text chosen by the agent during the build; the spec had no text for it); after cancellation, a new quote of the same request can be booked.
 - Booking numbers follow the booking id; tests assert the id-based pattern as well as the empty-database values above.
 - Every decision made while building is logged in `docs/decisions.md`. The README simplifications list gains: no payment terms on the bill of lading, no PDF, no editing a booking, no reweigh adjustment, no authentication.
 
@@ -160,5 +160,5 @@ A PDF bill of lading; payment terms or invoices; editing a booking after it is m
 
 ## Open questions
 1. The real deadline. The plan assumes 2026-11-25, which was never confirmed.
-2. PROPOSED items awaiting Graham's word: the booking path `POST /api/quotes/{id}/bookings/`; the phone format check; the order of 409 checks (already booked before `check_bookable`); the exact texts of the new 409 and 400 messages; the Case 4a and 4b receiver inputs; the model names.
+2. (Resolved 2026-11-24) Graham approved the booking path, the phone format check, the order of the 409 checks, the texts of the new 409 and 400 messages, the Case 4a and 4b receiver inputs and the model names.
 3. The Slice 2 fixtures' descriptions for Example 1, 3 and 5 units should match the descriptions in Cases 1 to 3 (test data only).

@@ -12,4 +12,5 @@ LTL freight quote and booking API (Django REST Framework). Work in progress; the
 - Accessorial fees ignore which end of the trip they apply to.
 - No reweigh or reclassification adjustment after booking.
 - Per-request quote history is unpaginated (3 quotes per click); pagination belongs on a future "all my quotes" list.
+- Bookings: the bill of lading has no payment terms and no PDF form; a booking cannot be edited (only cancelled); no reweigh adjustment; no tracking statuses beyond `booked` and `cancelled` (Slice 4).
 - No authentication yet.

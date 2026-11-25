@@ -1,6 +1,6 @@
 # Slice 3 Plan: Booking and Bill of Lading
 
-Status: DRAFT for Graham's approval (2026-11-24). Nothing is built until Graham approves this plan. The spec (`slice_03_booking.md`) wins if the plan and spec ever disagree. Names marked "proposed" are the agent's suggestions, not decisions. Budget: 2 working days for the booking, bill of lading and cancellation, plus about half a day for the labels.
+Status: APPROVED by Graham (2026-11-24) and IMPLEMENTED (2026-11-25). The spec (`slice_03_booking.md`) wins if the plan and spec ever disagree. Names marked "proposed" are the agent's suggestions, not decisions. Budget: 2 working days for the booking, bill of lading and cancellation, plus about half a day for the labels.
 
 ## Approach
 Same as Slices 1 and 2: small steps, rule modules first. The contact rules and the bill of lading and label builders take plain inputs (strings, numbers, dates, dictionaries), so Graham's four cases can be tested with no database and no web request. The booking model, service, serializers and views come after the rules are tested. Every expected value in a test is Graham's from the spec; the agent never invents one. The full test suite, `ruff check .` and `ruff format --check .` run after every step.

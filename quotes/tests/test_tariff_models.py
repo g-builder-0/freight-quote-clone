@@ -68,9 +68,14 @@ class SeededTariffTests(TestCase):
         )  # fmt: skip
 
 
+FAR_FUTURE = datetime(2099, 1, 1, tzinfo=UTC)
+
+
 class CurrentVersionTests(TestCase):
     def test_the_current_version_is_the_one_with_the_latest_created_at(self):
-        newer = TariffVersion.objects.create(label="RATES-2026-2", created_at=NOW)
+        # Far in the future: the seeded RATES-2026-1 is stamped with the real clock when the
+        # test database is built, so a fixed date near today would sometimes be older than it.
+        newer = TariffVersion.objects.create(label="RATES-2026-2", created_at=FAR_FUTURE)
         self.assertEqual(TariffVersion.current(), newer)
 
     def test_an_older_created_at_does_not_become_current(self):
@@ -78,8 +83,8 @@ class CurrentVersionTests(TestCase):
         self.assertEqual(TariffVersion.current().label, "RATES-2026-1")
 
     def test_the_id_breaks_a_tie_on_created_at(self):
-        first = TariffVersion.objects.create(label="TIE-A", created_at=NOW)
-        second = TariffVersion.objects.create(label="TIE-B", created_at=NOW)
+        first = TariffVersion.objects.create(label="TIE-A", created_at=FAR_FUTURE)
+        second = TariffVersion.objects.create(label="TIE-B", created_at=FAR_FUTURE)
         self.assertGreater(second.pk, first.pk)
         self.assertEqual(TariffVersion.current(), second)
 

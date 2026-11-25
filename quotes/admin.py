@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     AccessorialFee,
+    Booking,
     CarrierTariff,
     Quote,
     QuotedUnit,
@@ -12,7 +13,7 @@ from .models import (
 
 
 class ReadOnlyAdmin(admin.ModelAdmin):
-    """Tariff and quote rows are immutable history: the admin shows them but cannot change them."""
+    """Tariff, quote and booking rows are history: the admin shows them but cannot change them."""
 
     def has_add_permission(self, request):
         return False
@@ -32,5 +33,6 @@ for model in (
     Quote,
     QuoteLineItem,
     QuotedUnit,
+    Booking,
 ):
     admin.site.register(model, ReadOnlyAdmin)
