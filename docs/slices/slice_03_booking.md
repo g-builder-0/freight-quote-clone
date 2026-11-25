@@ -18,11 +18,10 @@ Slice 3 builds only the statuses `booked` and `cancelled`. The later statuses (p
 
 ### Contacts and instructions
 - The shipper contact and the receiver contact are collected at booking, not on the quote request. Both appear on the bill of lading.
-- Each contact has a name (required) and a phone, an email, or both. At least one of phone and email is required. The shipper contact is always required.
-- The receiver contact is always required (it is needed for the consignee details on the bill of lading).
-- If the quote's request has the appointment flag, the receiver's phone is required; an email alone is not accepted, because a carrier schedules a delivery appointment by calling the receiver. (Decided 2026-11-24, Option B.)
+- Each contact has a name, a phone and an email, and all three are required (Slice 5 change, decided 2026-11-25; before that a contact needed a name and a phone or an email). The same rule applies to the shipper and the receiver, so a delivery appointment no longer changes any contact rule. The database also refuses an empty phone or email on either contact (check constraints on the booking).
+- The shipper contact and the receiver contact are always required (the receiver is needed for the consignee details on the bill of lading).
 - Special instructions are optional text of at most 500 characters.
-- Phone numbers (approved): US numbers of 10 digits, with spaces, dashes, dots and parentheses allowed and an optional leading 1 or +1, stored as NNN-NNN-NNNN; emails use the standard email check.
+- Phone numbers (approved): US numbers of 10 digits, with spaces, dashes, dots and parentheses allowed and an optional leading 1 or +1, stored as NNN-NNN-NNNN; emails use the standard email check. A phone or email of only spaces counts as missing.
 
 ### Booking number
 - The booking number is `BK-` plus the booking's database id padded to six digits (the first booking in an empty database is `BK-000001`). The bill of lading number is the same string.
@@ -50,7 +49,7 @@ Slice 3 builds only the statuses `booked` and `cancelled`. The later statuses (p
 ### Errors
 | Status | When |
 |---|---|
-| 400 | The request body is invalid: a missing or malformed contact, a receiver with no phone when the appointment flag is set, instructions over 500 characters, a missing cancel reason. If a request fails both ways, the 400 is reported first. |
+| 400 | The request body is invalid: a contact missing its name, phone or email or with a malformed one, instructions over 500 characters, a missing cancel reason. If a request fails both ways, the 400 is reported first. |
 | 404 | The quote or booking does not exist. |
 | 409 | The server's stored state blocks the request: `check_bookable` fails (reason text from the function); the quote is already booked, or its request already has an active booking; a cancelled booking is cancelled or asked for labels. |
 
@@ -71,8 +70,8 @@ Every example runs against an empty database, so the first booking is `BK-000001
 Quote: Slice 2 Example 1 (mid carrier, $913.85, `RATES-2026-1`, `NMFTA-2025-1`, liftgate requested, no appointment, pickup Monday 2026-11-30, estimated delivery Thursday 2026-12-03), created Wednesday 2026-11-25 at 08:10 America/Chicago. Handling units: 1 pallet, 1,200 lb, class 55, "Ceramic floor tiles, boxed"; 1 crate, 400 lb, class 125, "Rack-mount network switches".
 
 Booking request at 2026-11-25 09:30 America/Chicago:
-- Shipper: Dana Whitfield, 972-555-0142; 2200 Commerce Park Way, Allen, TX 75002 (business dock).
-- Receiver: Marcus Bell, 404-555-0178; 418 Magnolia Ridge Dr SE, Atlanta, GA 30301 (residential).
+- Shipper: Dana Whitfield, 972-555-0142, dana.whitfield@example.com; 2200 Commerce Park Way, Allen, TX 75002 (business dock).
+- Receiver: Marcus Bell, 404-555-0178, marcus.bell@example.com; 418 Magnolia Ridge Dr SE, Atlanta, GA 30301 (residential).
 - Special instructions: "Carrier must provide a liftgate for delivery; the delivery address is a residence with no loading dock. Call receiver 30 minutes before delivery."
 
 Expected: 201. Booking number and bill of lading number `BK-000001`; status `booked`; booked at 2026-11-25 09:30; confirmation total $913.85. Bill of lading: booking date 2026-11-25, pickup date 2026-11-30, carrier mid; the shipper and consignee above; the two units above; total weight 1,600 lb; accessorial liftgate (requested); the instructions above; no price. The quote is unchanged, there is one booking, and `check_bookable` returned OK.
@@ -85,21 +84,17 @@ Booking requests at 2026-11-25 09:30. Shared inputs:
 - Consignee address: Lot 7, 300 Harbor Ridge Rd, Portland, ME 04101 (construction site).
 - Special instructions: "Delivery appointment required; call receiver to schedule. Site gate code needed from receiver."
 
-| Sub-case | Receiver sent | Expected |
-|---|---|---|
-| 2a | Priya Raman, 207-555-0163 | 201; `BK-000001`; `booked`; confirmation total $1,605.36 |
-| 2b | Priya Raman, priya.raman@example.com (no phone) | 400; nothing saved and the quote unchanged; body `{"receiver_contact": {"phone": ["A phone number is required for the receiver when the quote includes a delivery appointment."]}}` |
-| 2c | Priya Raman, 207-555-0163 and priya.raman@example.com | 201; `BK-000001`; phone and email both stored and both on the bill of lading |
+Receiver sent: Priya Raman, 207-555-0163, priya.raman@example.com. Expected: 201; `BK-000001`; `booked`; confirmation total $1,605.36; the receiver's phone and email both stored and both on the bill of lading.
 
-- 2b follow-up: the same request with the phone added returns 201 with `BK-000001`, proving the failed attempt left no record and did not use up the booking number.
-- Bill of lading (2a and 2c): booking date 2026-11-25, pickup date 2026-12-01, carrier fast; destination type construction site; accessorial appointment (requested); no price and no fees. 2c shows the receiver's email as well as the phone.
+- Slice 5 change (2026-11-25): the earlier sub-cases 2a (phone only) and 2b (email only, refused with an appointment-specific message) were removed when every contact began to need a phone and an email; their inputs became Case 5.
+- Bill of lading: booking date 2026-11-25, pickup date 2026-12-01, carrier fast; destination type construction site; accessorial appointment (requested); no price and no fees; the receiver's phone and email are shown.
 
 ### Case 3: pallet labels for the Example 5 cheap-carrier quote
 Quote: Slice 2 Example 5 (cheap carrier; origin 75002 business dock; destination 90001 Los Angeles business dock; pickup Monday 2026-12-07; no liftgate, no appointment), created Wednesday 2026-11-25 at 08:10. Lines: 3 pallets of 400 lb each, class 70, "Packaged hardware fasteners"; 2 crates of 250 lb each, class 70, "Replacement electric motor housings"; 2 drums of 150 lb each, class 150, "Food-grade vegetable oil, sealed drums".
 
 Booking request at 2026-11-25 09:30:
-- Shipper: Dana Whitfield, 972-555-0142; 2200 Commerce Park Way, Allen, TX 75002.
-- Receiver: Elena Ortiz, 323-555-0119; 4500 Distribution Ave, Los Angeles, CA 90001 (business dock, made up).
+- Shipper: Dana Whitfield, 972-555-0142, dana.whitfield@example.com; 2200 Commerce Park Way, Allen, TX 75002.
+- Receiver: Elena Ortiz, 323-555-0119, elena.ortiz@example.com; 4500 Distribution Ave, Los Angeles, CA 90001 (business dock, made up).
 - Special instructions: "Receiving dock hours 7:00 to 15:00."
 
 Expected: 201, `BK-000001`. `GET /api/bookings/{id}/labels/` returns 7 labels:
@@ -117,7 +112,7 @@ Expected: 201, `BK-000001`. `GET /api/bookings/{id}/labels/` returns 7 labels:
 - The number of labels is the sum of the quantities (7), not the number of lines (3). Each label shows the weight of one unit, not of the line. Every label also shows the shipper and consignee names and cities, the destination ZIP 90001, the carrier, the pickup date and the commodity description of its unit.
 
 ### Case 4: rejections and cancellation
-Test inputs for 4a and 4b (receiver and address) were proposed by the agent and approved by Graham; the rest are fixed by the rules above. For 4a and 4b the shipper is Dana Whitfield as above, the receiver is Luis Herrera, 602-555-0126, 1200 Sonoran Business Pkwy, Phoenix, AZ 85001 (made up), and the instructions are blank.
+Test inputs for 4a and 4b (receiver and address) were proposed by the agent and approved by Graham; the rest are fixed by the rules above. For 4a and 4b the shipper is Dana Whitfield as above (with her email), the receiver is Luis Herrera, 602-555-0126, luis.herrera@example.com, 1200 Sonoran Business Pkwy, Phoenix, AZ 85001 (made up), and the instructions are blank.
 
 | Sub-case | Quote | Action | Expected |
 |---|---|---|---|
@@ -134,6 +129,27 @@ Test inputs for 4a and 4b (receiver and address) were proposed by the agent and 
 - 4b is the boundary pair of 4a: one minute either side of expiry. In every 409 case no booking is created, and the quote is unchanged.
 - Also: cancelling without a reason is 400; booking an unknown quote is 404; an unknown booking is 404.
 
+### Case 5: contact rejections (Slice 5 change, 2026-11-25)
+All sub-cases book the Example 1 quote at 2026-11-25 09:30 with the Case 1 inputs, changing only the contact named, unless stated. Each returns 400, creates nothing and leaves the quote unchanged.
+
+| Sub-case | Contact sent | Expected body |
+|---|---|---|
+| 5a | shipper without a phone | `{"shipper_contact": {"phone": ["Enter a phone number."]}}` |
+| 5b | shipper without an email | `{"shipper_contact": {"email": ["Enter an email address."]}}` |
+| 5c | shipper with neither | `{"shipper_contact": {"phone": ["Enter a phone number."], "email": ["Enter an email address."]}}` |
+| 5d | receiver without a phone | `{"receiver_contact": {"phone": ["Enter a phone number."]}}` |
+| 5e | receiver without an email | `{"receiver_contact": {"email": ["Enter an email address."]}}` |
+| 5f | receiver with neither | `{"receiver_contact": {"phone": ["Enter a phone number."], "email": ["Enter an email address."]}}` |
+| 5g | shipper phone `972-555` | `{"shipper_contact": {"phone": ["Enter a 10-digit US phone number, for example 972-555-0142."]}}` |
+| 5h | receiver email `not-an-email` | `{"receiver_contact": {"email": ["Enter a valid email address."]}}` |
+| 5i | shipper without a name | `{"shipper_contact": {"name": ["Enter a name."]}}` |
+| 5j | the Example 3 appointment quote, receiver Priya Raman with an email only | `{"receiver_contact": {"phone": ["Enter a phone number."]}}` |
+
+- 5j follow-up: the same request with the phone added returns 201 with `BK-000001`, proving the failed attempt left no record and did not use up the booking number.
+
+### Case 6: the database constraint (Slice 5 change, 2026-11-25)
+- Saving a booking directly with an empty `shipper_phone`, `shipper_email`, `receiver_phone` or `receiver_email` fails with a database integrity error (one test per field) and saves nothing. A booking with all four filled saves normally.
+
 ## API
 | Method and path | Purpose |
 |---|---|
@@ -149,7 +165,7 @@ No authentication in Slice 3 (accounts are the last item in the cut order). No u
 Slice 3 is done when `python manage.py test`, `ruff check .` and `ruff format --check .` all pass, the migration is applied, and tests exist and pass for:
 - Cases 1 to 4 above, used verbatim: every response status, the booking number, the bill of lading contents, the labels and barcodes, the error bodies and the stored state after each failure.
 - The bill of lading never shows a price or fee; it is unchanged after the quote request is edited.
-- Contact rules: receiver and shipper required; phone or email required; an appointment quote requires the receiver's phone; instructions over 500 characters rejected.
+- Contact rules: receiver and shipper required; each needs a name, a phone and an email (Slice 5 change); instructions over 500 characters rejected.
 - The booking and its snapshot are saved in one transaction; a failure part-way saves nothing. A concurrent double booking cannot create two bookings (the unique constraint backs up the service check).
 - A request with an active booking rejects a booking of its other quotes with the 409 text "This quote request already has an active booking." (text chosen by the agent during the build; the spec had no text for it); after cancellation, a new quote of the same request can be booked.
 - Booking numbers follow the booking id; tests assert the id-based pattern as well as the empty-database values above.

@@ -20,8 +20,10 @@ def make_booking(quote: Quote, **overrides) -> Booking:
         booked_at=NOW + timedelta(minutes=80),
         shipper_name="Dana Whitfield",
         shipper_phone="972-555-0142",
+        shipper_email="dana.whitfield@example.com",
         receiver_name="Marcus Bell",
         receiver_phone="404-555-0178",
+        receiver_email="marcus.bell@example.com",
         special_instructions="Call receiver 30 minutes before delivery.",
         bill_of_lading=SNAPSHOT,
     )
@@ -148,3 +150,20 @@ class MarkCancelledTests(TestCase):
         self.booking.receiver_name = "Someone Else"
         with self.assertRaises(ImmutableRecordError):
             self.booking.save()
+
+
+class ContactConstraintTests(TestCase):
+    """Case 6: the database itself refuses an empty phone or email on either contact."""
+
+    def setUp(self):
+        self.quote = create_quotes(example_1_request(), NOW)[1]
+
+    def test_a_booking_with_all_four_filled_saves(self):
+        self.assertEqual(make_booking(self.quote).shipper_email, "dana.whitfield@example.com")
+
+    def test_an_empty_phone_or_email_is_refused_for_each_field(self):
+        for field in ("shipper_phone", "shipper_email", "receiver_phone", "receiver_email"):
+            with self.subTest(field=field):
+                with self.assertRaises(IntegrityError), transaction.atomic():
+                    make_booking(self.quote, **{field: ""})
+                self.assertEqual(Booking.objects.count(), 0)

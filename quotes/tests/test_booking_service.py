@@ -18,9 +18,9 @@ INSTRUCTIONS = (
     "Carrier must provide a liftgate for delivery; the delivery address is a residence with "
     "no loading dock. Call receiver 30 minutes before delivery."
 )
-DANA = Contact("Dana Whitfield", phone="972-555-0142")
-MARCUS = Contact("Marcus Bell", phone="404-555-0178")
-LUIS = Contact("Luis Herrera", phone="602-555-0126")
+DANA = Contact("Dana Whitfield", phone="972-555-0142", email="dana.whitfield@example.com")
+MARCUS = Contact("Marcus Bell", phone="404-555-0178", email="marcus.bell@example.com")
+LUIS = Contact("Luis Herrera", phone="602-555-0126", email="luis.herrera@example.com")
 
 
 # fmt: off
@@ -104,18 +104,18 @@ class BookQuoteTests(TestCase):
         booking = book_quote(
             mid_quote(case_1_request()),
             DANA,
-            Contact("Marcus Bell", phone="404-555-0178", email="marcus@example.com"),
+            MARCUS,
             INSTRUCTIONS,
             BOOKED_AT,
         )
         booking.refresh_from_db()
         self.assertEqual(
             (booking.shipper_name, booking.shipper_phone, booking.shipper_email),
-            ("Dana Whitfield", "972-555-0142", ""),
+            ("Dana Whitfield", "972-555-0142", "dana.whitfield@example.com"),
         )
         self.assertEqual(
             (booking.receiver_name, booking.receiver_phone, booking.receiver_email),
-            ("Marcus Bell", "404-555-0178", "marcus@example.com"),
+            ("Marcus Bell", "404-555-0178", "marcus.bell@example.com"),
         )
         self.assertEqual(booking.special_instructions, INSTRUCTIONS)
 

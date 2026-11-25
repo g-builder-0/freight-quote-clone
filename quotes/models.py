@@ -394,6 +394,15 @@ class Booking(models.Model):
 
     class Meta:
         ordering = ["-booked_at", "-id"]
+        # Slice 5: the database itself refuses a booking without a phone and an email for both
+        # contacts, whatever code tries to save it. One constraint per field, so a failure names it.
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(**{field: ""}),
+                name=f"booking_{field}_not_empty",
+            )
+            for field in ("shipper_phone", "shipper_email", "receiver_phone", "receiver_email")
+        ]
 
     def __str__(self) -> str:
         return f"{self.booking_number} ({self.status})"

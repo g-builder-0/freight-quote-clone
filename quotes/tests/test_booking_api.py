@@ -16,11 +16,17 @@ from quotes.tests.test_booking_service import (
 )
 
 AT_0930 = datetime(2026, 11, 25, 15, 30, tzinfo=UTC)
-DANA = {"name": "Dana Whitfield", "phone": "972-555-0142"}
-MARCUS = {"name": "Marcus Bell", "phone": "404-555-0178"}
-APPOINTMENT_MESSAGE = (
-    "A phone number is required for the receiver when the quote includes a delivery appointment."
-)
+DANA = {
+    "name": "Dana Whitfield",
+    "phone": "972-555-0142",
+    "email": "dana.whitfield@example.com",
+}
+MARCUS = {"name": "Marcus Bell", "phone": "404-555-0178", "email": "marcus.bell@example.com"}
+PRIYA = {"name": "Priya Raman", "phone": "207-555-0163", "email": "priya.raman@example.com"}
+ELENA = {"name": "Elena Ortiz", "phone": "323-555-0119", "email": "elena.ortiz@example.com"}
+LUIS = {"name": "Luis Herrera", "phone": "602-555-0126", "email": "luis.herrera@example.com"}
+NEED_PHONE = "Enter a phone number."
+NEED_EMAIL = "Enter an email address."
 
 
 class BookingApiBase(APITestCase):
@@ -89,8 +95,8 @@ class Case1Tests(BookingApiBase):
         self.assertEqual(body["confirmation_total"], "913.85")
         self.assertEqual(body["carrier"]["code"], "mid")
         self.assertEqual(body["quote"], quote.pk)
-        self.assertEqual(body["shipper_contact"], {**DANA, "email": ""})
-        self.assertEqual(body["receiver_contact"], {**MARCUS, "email": ""})
+        self.assertEqual(body["shipper_contact"], DANA)
+        self.assertEqual(body["receiver_contact"], MARCUS)
         self.assertEqual(body["special_instructions"], INSTRUCTIONS)
         self.assertIsNone(body["cancelled_at"])
         self.assertTrue(body["booked_at"].startswith("2026-11-25T09:30:00"))
@@ -141,53 +147,18 @@ class Case2Tests(BookingApiBase):
             "Site gate code needed from receiver."
         )
 
-    def test_2a_receiver_with_a_phone(self):
-        response = self.book(
-            self.quote,
-            receiver={"name": "Priya Raman", "phone": "207-555-0163"},
-            instructions=self.instructions,
-        )
+    def test_case_2_appointment_booking_with_phone_and_email(self):
+        response = self.book(self.quote, receiver=PRIYA, instructions=self.instructions)
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.json()["booking_number"], "BK-000001")
+        self.assertEqual(response.json()["status"], "booked")
         self.assertEqual(response.json()["confirmation_total"], "1605.36")
-
-    def test_2b_receiver_with_only_an_email_is_refused_and_the_retry_works(self):
-        before = Quote.objects.values().get(pk=self.quote.pk)
-        response = self.book(
-            self.quote,
-            receiver={"name": "Priya Raman", "email": "priya.raman@example.com"},
-            instructions=self.instructions,
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {"receiver_contact": {"phone": [APPOINTMENT_MESSAGE]}})
-        self.assertEqual(Booking.objects.count(), 0)
-        self.assertEqual(Quote.objects.values().get(pk=self.quote.pk), before)
-
-        retry = self.book(
-            self.quote,
-            receiver={"name": "Priya Raman", "phone": "207-555-0163"},
-            instructions=self.instructions,
-        )
-        self.assertEqual(retry.status_code, 201)
-        self.assertEqual(retry.json()["booking_number"], "BK-000001")
-
-    def test_2c_phone_and_email_are_both_stored_and_on_the_bill_of_lading(self):
-        receiver = {
-            "name": "Priya Raman", "phone": "207-555-0163", "email": "priya.raman@example.com"
-        }  # fmt: skip
-        response = self.book(self.quote, receiver=receiver, instructions=self.instructions)
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json()["receiver_contact"], receiver)
+        self.assertEqual(response.json()["receiver_contact"], PRIYA)
         bol = self.client.get(f"/api/bookings/{response.json()['id']}/bill-of-lading/").json()
         self.assertEqual(bol["consignee"]["phone"], "207-555-0163")
         self.assertEqual(bol["consignee"]["email"], "priya.raman@example.com")
         self.assertEqual(bol["accessorials"], ["appointment"])
         self.assertEqual(bol["total_weight_lb"], 2500)
-
-    def test_a_request_without_an_appointment_accepts_an_email_only_receiver(self):
-        quote = create_quotes(case_1_request(), NOW)[1]
-        response = self.book(quote, receiver={"name": "Marcus Bell", "email": "m@example.com"})
-        self.assertEqual(response.status_code, 201)
 
 
 class Case3Tests(BookingApiBase):
@@ -195,7 +166,7 @@ class Case3Tests(BookingApiBase):
         quote = create_quotes(example_5_request(), NOW)[0]  # cheap carrier
         response = self.book(
             quote,
-            receiver={"name": "Elena Ortiz", "phone": "323-555-0119"},
+            receiver=ELENA,
             instructions="Receiving dock hours 7:00 to 15:00.",
         )
         self.assertEqual(response.status_code, 201, response.data)
@@ -232,7 +203,7 @@ class Case3Tests(BookingApiBase):
 class Case4Tests(BookingApiBase):
     def test_4a_and_4b_the_boundary_pair_around_expiry(self):
         quote = create_quotes(example_4_request(), NOW)[1]
-        luis = {"name": "Luis Herrera", "phone": "602-555-0126"}
+        luis = LUIS
         self.now = datetime(2026, 12, 2, 14, 10, tzinfo=UTC)
         refused = self.book(quote, receiver=luis, instructions="")
         self.assertEqual(refused.status_code, 409)
@@ -355,26 +326,20 @@ class ErrorTests(BookingApiBase):
             },
         )
 
-    def test_a_contact_needs_a_name_and_a_phone_or_an_email(self):
-        response = self.book(self.quote, shipper={"name": "", "phone": ""})
+    def test_a_contact_needs_a_name_a_phone_and_an_email(self):
+        response = self.book(self.quote, shipper={"name": "", "phone": "", "email": ""})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
             {"shipper_contact": {
                 "name": ["Enter a name."],
-                "non_field_errors": ["Enter a phone number or an email address."],
+                "phone": [NEED_PHONE],
+                "email": [NEED_EMAIL],
             }},
         )  # fmt: skip
 
-    def test_a_bad_phone_is_refused(self):
-        response = self.book(self.quote, receiver={"name": "Marcus Bell", "phone": "12345"})
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("phone", response.json()["receiver_contact"])
-
     def test_a_phone_is_stored_in_dashed_form(self):
-        response = self.book(
-            self.quote, receiver={"name": "Marcus Bell", "phone": "(404) 555 0178"}
-        )
+        response = self.book(self.quote, receiver={**MARCUS, "phone": "(404) 555 0178"})
         self.assertEqual(response.json()["receiver_contact"]["phone"], "404-555-0178")
 
     def test_instructions_over_500_characters_are_refused_and_500_is_accepted(self):
@@ -435,3 +400,87 @@ class ErrorTests(BookingApiBase):
         self.assertEqual(self.client.get(f"/api/quotes/{self.quote.pk}/bookings/").status_code, 405)
         self.assertEqual(self.client.get("/api/bookings/").status_code, 404)
         self.assertEqual(Booking.objects.count(), 1)
+
+
+class Case5Tests(BookingApiBase):
+    """Case 5: contact rejections. Each is a 400 that creates nothing and leaves the quote alone."""
+
+    def setUp(self):
+        super().setUp()
+        self.quote = create_quotes(case_1_request(), NOW)[1]
+        self.before = Quote.objects.values().get(pk=self.quote.pk)
+
+    def without(self, contact, *fields):
+        return {key: value for key, value in contact.items() if key not in fields}
+
+    def assert_refused(self, response, expected):
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(response.json(), expected)
+        self.assertEqual(Booking.objects.count(), 0)
+        self.assertEqual(Quote.objects.values().get(pk=self.quote.pk), self.before)
+
+    def test_5a_shipper_without_a_phone(self):
+        response = self.book(self.quote, shipper=self.without(DANA, "phone"))
+        self.assert_refused(response, {"shipper_contact": {"phone": [NEED_PHONE]}})
+
+    def test_5b_shipper_without_an_email(self):
+        response = self.book(self.quote, shipper=self.without(DANA, "email"))
+        self.assert_refused(response, {"shipper_contact": {"email": [NEED_EMAIL]}})
+
+    def test_5c_shipper_with_neither(self):
+        response = self.book(self.quote, shipper=self.without(DANA, "phone", "email"))
+        self.assert_refused(
+            response, {"shipper_contact": {"phone": [NEED_PHONE], "email": [NEED_EMAIL]}}
+        )
+
+    def test_5d_receiver_without_a_phone(self):
+        response = self.book(self.quote, receiver=self.without(MARCUS, "phone"))
+        self.assert_refused(response, {"receiver_contact": {"phone": [NEED_PHONE]}})
+
+    def test_5e_receiver_without_an_email(self):
+        response = self.book(self.quote, receiver=self.without(MARCUS, "email"))
+        self.assert_refused(response, {"receiver_contact": {"email": [NEED_EMAIL]}})
+
+    def test_5f_receiver_with_neither(self):
+        response = self.book(self.quote, receiver=self.without(MARCUS, "phone", "email"))
+        self.assert_refused(
+            response, {"receiver_contact": {"phone": [NEED_PHONE], "email": [NEED_EMAIL]}}
+        )
+
+    def test_5g_shipper_with_a_bad_phone(self):
+        response = self.book(self.quote, shipper={**DANA, "phone": "972-555"})
+        self.assert_refused(
+            response,
+            {"shipper_contact": {
+                "phone": ["Enter a 10-digit US phone number, for example 972-555-0142."]
+            }},
+        )  # fmt: skip
+
+    def test_5h_receiver_with_a_bad_email(self):
+        response = self.book(self.quote, receiver={**MARCUS, "email": "not-an-email"})
+        self.assert_refused(
+            response, {"receiver_contact": {"email": ["Enter a valid email address."]}}
+        )
+
+    def test_5i_shipper_without_a_name(self):
+        response = self.book(self.quote, shipper=self.without(DANA, "name"))
+        self.assert_refused(response, {"shipper_contact": {"name": ["Enter a name."]}})
+
+    def test_5j_appointment_quote_receiver_with_an_email_only_and_the_retry_works(self):
+        quote = create_quotes(example_3_request(), NOW)[2]  # fast carrier, appointment
+        before = Quote.objects.values().get(pk=quote.pk)
+        instructions = (
+            "Delivery appointment required; call receiver to schedule. "
+            "Site gate code needed from receiver."
+        )
+        response = self.book(
+            quote, receiver=self.without(PRIYA, "phone"), instructions=instructions
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"receiver_contact": {"phone": [NEED_PHONE]}})
+        self.assertEqual(Booking.objects.count(), 0)
+        self.assertEqual(Quote.objects.values().get(pk=quote.pk), before)
+
+        retry = self.book(quote, receiver=PRIYA, instructions=instructions)
+        self.assertEqual(retry.status_code, 201)
+        self.assertEqual(retry.json()["booking_number"], "BK-000001")

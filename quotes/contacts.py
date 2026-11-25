@@ -1,4 +1,4 @@
-"""Contact and special-instruction rules for booking (Slice 3).
+"""Contact and special-instruction rules for booking (Slice 3, tightened in Slice 5).
 
 Plain-input functions: they take dictionaries and strings and return cleaned values and error
 messages. Nothing here touches the database, the clock or the web layer, so every rule is tested
@@ -15,10 +15,6 @@ from django.core.validators import validate_email
 NAME_MAX_LENGTH = 100
 INSTRUCTIONS_MAX_LENGTH = 500
 CANCEL_REASON_MAX_LENGTH = 200
-
-APPOINTMENT_PHONE_MESSAGE = (
-    "A phone number is required for the receiver when the quote includes a delivery appointment."
-)
 
 
 @dataclass(frozen=True)
@@ -54,14 +50,12 @@ def _text(data: Mapping, key: str) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def clean_contact(
-    data: Mapping, *, phone_required_message: str = ""
-) -> tuple[Contact | None, dict]:
-    """Check one contact: a name, and a phone or an email (or both).
+def clean_contact(data: Mapping) -> tuple[Contact | None, dict]:
+    """Check one contact: a name, a phone and an email are all required.
 
-    If `phone_required_message` is given, the phone is required and that message is the error when
-    it is missing (used for the receiver of an appointment delivery). Returns the cleaned contact
-    and a dictionary of errors; the contact is None when there are errors.
+    The same rule applies to the shipper and the receiver. Values are trimmed first, so a value
+    of only spaces counts as missing. Returns the cleaned contact and a dictionary of errors keyed
+    by field; the contact is None when there are errors.
     """
     errors: dict[str, list[str]] = {}
 
@@ -73,7 +67,9 @@ def clean_contact(
 
     raw_phone = _text(data, "phone")
     phone = ""
-    if raw_phone:
+    if not raw_phone:
+        errors["phone"] = ["Enter a phone number."]
+    else:
         normalized = normalize_phone(raw_phone)
         if normalized is None:
             errors["phone"] = ["Enter a 10-digit US phone number, for example 972-555-0142."]
@@ -81,32 +77,17 @@ def clean_contact(
             phone = normalized
 
     email = _text(data, "email")
-    if email:
+    if not email:
+        errors["email"] = ["Enter an email address."]
+    else:
         try:
             validate_email(email)
         except ValidationError:
             errors["email"] = ["Enter a valid email address."]
 
-    if not raw_phone and phone_required_message:
-        errors["phone"] = [phone_required_message]
-    elif not raw_phone and not email:
-        errors["non_field_errors"] = ["Enter a phone number or an email address."]
-
     if errors:
         return None, errors
     return Contact(name=name, phone=phone, email=email), {}
-
-
-def clean_shipper(data: Mapping) -> tuple[Contact | None, dict]:
-    """The shipper contact: always required, name plus a phone or an email."""
-    return clean_contact(data)
-
-
-def clean_receiver(data: Mapping, *, appointment_requested: bool) -> tuple[Contact | None, dict]:
-    """The receiver contact: always required. With an appointment the phone is required too,
-    because a carrier schedules a delivery appointment by calling the receiver."""
-    message = APPOINTMENT_PHONE_MESSAGE if appointment_requested else ""
-    return clean_contact(data, phone_required_message=message)
 
 
 def clean_instructions(value) -> tuple[str, list[str]]:

@@ -20,7 +20,8 @@ from quotes.bill_of_lading import (
 )
 from quotes.contacts import Contact
 
-DANA = Contact(name="Dana Whitfield", phone="972-555-0142")
+DANA = Contact(name="Dana Whitfield", phone="972-555-0142", email="dana.whitfield@example.com")
+PRIYA = Contact(name="Priya Raman", phone="207-555-0163", email="priya.raman@example.com")
 ALLEN = Party(
     contact=DANA, street="2200 Commerce Park Way", city="Allen", state="TX",
     postal_code="75002", location_type="business_dock",
@@ -45,7 +46,9 @@ def case_1() -> dict:
         carrier_name="Mid",
         shipper=ALLEN,
         consignee=Party(
-            contact=Contact(name="Marcus Bell", phone="404-555-0178"),
+            contact=Contact(
+                name="Marcus Bell", phone="404-555-0178", email="marcus.bell@example.com"
+            ),
             street="418 Magnolia Ridge Dr SE",
             city="Atlanta",
             state="GA",
@@ -120,7 +123,9 @@ def case_3() -> dict:
         carrier_name="Cheap",
         shipper=ALLEN,
         consignee=Party(
-            contact=Contact(name="Elena Ortiz", phone="323-555-0119"),
+            contact=Contact(
+                name="Elena Ortiz", phone="323-555-0119", email="elena.ortiz@example.com"
+            ),
             street="4500 Distribution Ave",
             city="Los Angeles",
             state="CA",
@@ -182,7 +187,8 @@ class Case1Tests(SimpleTestCase):
         self.assertEqual(
             bol["shipper"],
             {
-                "name": "Dana Whitfield", "phone": "972-555-0142", "email": "",
+                "name": "Dana Whitfield", "phone": "972-555-0142",
+                "email": "dana.whitfield@example.com",
                 "street": "2200 Commerce Park Way", "city": "Allen", "state": "TX",
                 "postal_code": "75002", "location_type": "business_dock",
             },
@@ -190,7 +196,8 @@ class Case1Tests(SimpleTestCase):
         self.assertEqual(
             bol["consignee"],
             {
-                "name": "Marcus Bell", "phone": "404-555-0178", "email": "",
+                "name": "Marcus Bell", "phone": "404-555-0178",
+                "email": "marcus.bell@example.com",
                 "street": "418 Magnolia Ridge Dr SE", "city": "Atlanta", "state": "GA",
                 "postal_code": "30301", "location_type": "residential",
             },
@@ -227,20 +234,13 @@ class Case1Tests(SimpleTestCase):
 
 
 class Case2Tests(SimpleTestCase):
-    def test_2a_phone_only_receiver(self):
-        bol = case_2(Contact(name="Priya Raman", phone="207-555-0163"))
-        self.assertEqual(bol["consignee"]["phone"], "207-555-0163")
-        self.assertEqual(bol["consignee"]["email"], "")
-
-    def test_2c_phone_and_email_are_both_shown(self):
-        bol = case_2(
-            Contact(name="Priya Raman", phone="207-555-0163", email="priya.raman@example.com")
-        )
+    def test_the_receivers_phone_and_email_are_both_shown(self):
+        bol = case_2(PRIYA)
         self.assertEqual(bol["consignee"]["phone"], "207-555-0163")
         self.assertEqual(bol["consignee"]["email"], "priya.raman@example.com")
 
     def test_destination_is_a_construction_site_and_the_accessorial_is_the_appointment(self):
-        bol = case_2(Contact(name="Priya Raman", phone="207-555-0163"))
+        bol = case_2(PRIYA)
         self.assertEqual(bol["consignee"]["location_type"], "construction_site")
         self.assertEqual(bol["consignee"]["street"], "Lot 7, 300 Harbor Ridge Rd")
         self.assertEqual(bol["accessorials"], ["appointment"])
@@ -248,7 +248,7 @@ class Case2Tests(SimpleTestCase):
         self.assertEqual(bol["pickup_date"], "2026-12-01")
 
     def test_total_weight_is_2500_and_no_price_appears(self):
-        bol = case_2(Contact(name="Priya Raman", phone="207-555-0163"))
+        bol = case_2(PRIYA)
         self.assertEqual(bol["total_weight_lb"], 2500)
         text = json.dumps(bol).lower()
         for word in ("1605", "price", "fee", "limited"):

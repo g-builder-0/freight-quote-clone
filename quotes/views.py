@@ -76,7 +76,7 @@ class QuoteViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
         Order: 404 for an unknown quote, then 400 for a bad body, then 409 for a state conflict.
         """
         quote = self.get_object()
-        shipper, receiver, instructions, errors = _booking_input(request.data, quote)
+        shipper, receiver, instructions, errors = _booking_input(request.data)
         if errors:
             return Response(errors, status=status.HTTP_400_BAD_REQUEST)
         try:
@@ -101,18 +101,12 @@ def _contact_errors(data, key: str, clean) -> tuple[object, dict]:
     return contact, ({key: errors} if errors else {})
 
 
-def _booking_input(data, quote: Quote):
+def _booking_input(data):
     """Check a booking request body. Returns (shipper, receiver, instructions, errors)."""
     if not isinstance(data, dict):
         return None, None, "", {"non_field_errors": ["Send a JSON object."]}
-    shipper, errors = _contact_errors(data, "shipper_contact", contacts.clean_shipper)
-    receiver, receiver_errors = _contact_errors(
-        data,
-        "receiver_contact",
-        lambda value: contacts.clean_receiver(
-            value, appointment_requested=quote.quote_request.appointment_requested
-        ),
-    )
+    shipper, errors = _contact_errors(data, "shipper_contact", contacts.clean_contact)
+    receiver, receiver_errors = _contact_errors(data, "receiver_contact", contacts.clean_contact)
     errors.update(receiver_errors)
     instructions, instruction_errors = contacts.clean_instructions(data.get("special_instructions"))
     if instruction_errors:
