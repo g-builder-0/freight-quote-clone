@@ -19,6 +19,7 @@ Details, rules and worked examples are in the slice specs in `docs/slices/`.
 | `GET /api/bookings/{id}/labels/` | Pallet labels, one per unit (409 if cancelled). |
 | `POST /api/bookings/{id}/cancel/` | Cancel a booking with a reason. |
 | `POST /api/class-preview/` | Density and suggested class for one unit; saves nothing. |
+| `GET /api/limits/` | The size, weight and text-length limits the API enforces, for counters and messages. |
 
 ## Known simplifications (on purpose)
 - Tariffs are invented and illustrative (3 carriers, 5 weight breaks), not real carrier rates.

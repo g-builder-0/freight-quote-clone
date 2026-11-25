@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from . import contacts, serializers
+from . import contacts, models, serializers
 from .bill_of_lading import build_labels
 from .booking_service import BookingConflict, book_quote, cancel_booking
 from .models import Booking, BookingStatus, HandlingUnit, Quote, QuoteRequest
@@ -173,3 +173,28 @@ class ClassPreviewView(APIView):
         serializer.is_valid(raise_exception=True)
         unit = HandlingUnit(**serializer.validated_data)
         return Response(ClassPreviewResultSerializer(unit).data)
+
+
+class LimitsView(APIView):
+    """GET: the limits the front end needs for counters and friendly messages (Slice 5).
+
+    Holds no numbers of its own: each value is read from the constant the validation uses, at
+    the moment of the request, so the answer cannot disagree with the rules.
+    """
+
+    def get(self, request):
+        minimum = models.MIN_UNIT_VALUE
+        return Response(
+            {
+                "unit": {
+                    "weight_lb": {"min": minimum, "max": models.MAX_WEIGHT_LB},
+                    "length_in": {"min": minimum, "max": models.MAX_LENGTH_IN},
+                    "width_in": {"min": minimum, "max": models.MAX_WIDTH_IN},
+                    "height_in": {"min": minimum, "max": models.MAX_HEIGHT_IN},
+                },
+                "text": {
+                    "special_instructions_max": contacts.INSTRUCTIONS_MAX_LENGTH,
+                    "cancel_reason_max": contacts.CANCEL_REASON_MAX_LENGTH,
+                },
+            }
+        )

@@ -19,6 +19,7 @@ from .validators import validate_nmfc_code, validate_postal_code, validate_us_st
 
 # Hard limits per handling unit (Slice 1 spec). Carriers set their own limits; these are a
 # rough synthesis and are enforced by validation. Dimensions are whole inches, weight whole pounds.
+MIN_UNIT_VALUE = 1
 MAX_LENGTH_IN = 144
 MAX_WIDTH_IN = 96
 MAX_HEIGHT_IN = 96
@@ -85,16 +86,16 @@ class HandlingUnit(models.Model):
     unit_type = models.CharField(max_length=10, choices=UnitType.choices)
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     length_in = models.PositiveIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(MAX_LENGTH_IN)]
+        validators=[MinValueValidator(MIN_UNIT_VALUE), MaxValueValidator(MAX_LENGTH_IN)]
     )
     width_in = models.PositiveIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(MAX_WIDTH_IN)]
+        validators=[MinValueValidator(MIN_UNIT_VALUE), MaxValueValidator(MAX_WIDTH_IN)]
     )
     height_in = models.PositiveIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(MAX_HEIGHT_IN)]
+        validators=[MinValueValidator(MIN_UNIT_VALUE), MaxValueValidator(MAX_HEIGHT_IN)]
     )
     weight_lb = models.PositiveIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(MAX_WEIGHT_LB)]
+        validators=[MinValueValidator(MIN_UNIT_VALUE), MaxValueValidator(MAX_WEIGHT_LB)]
     )
     stackable = models.BooleanField(default=False)
     commodity_description = models.CharField(max_length=200)
